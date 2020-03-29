@@ -1,31 +1,15 @@
 use dcc_boids::{Boid, BoidCage, Vector};
-use gifski::progress::NoProgress;
-use gifski::{CatResult, Collector};
-use std::fs::File;
-use std::path::PathBuf;
-use std::thread;
-use imageproc::drawing::draw_filled_circle_mut;
-use image::{ImageBuffer, Rgb};
+use ggez::event::EventHandler;
+use ggez::{nalgebra as na, event};
+use ggez::{graphics, Context, ContextBuilder, GameResult};
 use rand::Rng;
+use std::time::{Instant, Duration};
+use ggez::conf::{WindowMode, FullscreenType, WindowSetup};
 
-struct Lodecoder {
-    frames: Vec<PathBuf>,
-    fps: usize,
-}
+const UPDATES_PER_SECOND: f32 = 60.0;
+// And we get the milliseconds of delay that this update rate corresponds to.
+const MILLIS_PER_UPDATE: u64 = (1.0 / UPDATES_PER_SECOND * 1000.0) as u64;
 
-impl Lodecoder {
-    pub fn new(frames: Vec<PathBuf>, fps: usize) -> Self {
-        Self { frames, fps }
-    }
-
-    fn collect(&mut self, mut dest: Collector) -> CatResult<()> {
-        for (i, frame) in self.frames.drain(..).enumerate() {
-            let delay = ((i + 1) * 100 / self.fps) - (i * 100 / self.fps); // See telecine/pulldown.
-            dest.add_frame_png_file(i, frame, delay as f64)?;
-        }
-        Ok(())
-    }
-}
 
 fn main() {
     let mut rng = rand::thread_rng();
@@ -38,50 +22,71 @@ fn main() {
         let v_x = rng.gen_range(-30.0, 30.0);
         let v_y = rng.gen_range(-30.0, 30.0);
 
-        boids.push(
-            Boid::new(Vector::new(x, y), Vector::new(v_x, v_y))
-        );
+        boids.push(Boid::new(Vector::new(x, y), Vector::new(v_x, v_y)));
     }
 
-    let mut cage = BoidCage::new(boids);
-    let mut files = Vec::new();
-    let dir = tempfile::tempdir().unwrap();
+    let cage = BoidCage::new(boids);
 
+    let (mut ctx, mut event_loop) = ContextBuilder::new("dcc-boids", "Robert Usher")
+        .window_setup( WindowSetup::default().title("dcc-boid"))
+        .window_mode(WindowMode::default().dimensions(1920.0, 1080.0).maximized(true).fullscreen_type(FullscreenType::Desktop))
+        .build()
+        .expect("Failed to create context!");
 
-    for tick in 0..1000 {
-        let mut buffer = ImageBuffer::new(1920, 1080);
+    let mut runner = BoidRunner::new(cage);
 
-        for boid in cage.boids.iter() {
-            draw_filled_circle_mut(&mut buffer, (boid.x() as i32, boid.y() as i32), 1, Rgb([255u8, 0u8, 100u8]));
+    match event::run(&mut ctx, &mut event_loop, &mut runner) {
+        Ok(_) => println!("Exited cleanly!"),
+        Err(e) => println!("Error occurred: {}", e),
+    }
+}
+
+struct BoidRunner {
+    cage: BoidCage,
+    last_update: Instant,
+}
+
+impl BoidRunner {
+    pub fn new(cage: BoidCage) -> Self {
+        Self {
+            cage,
+            last_update: Instant::now(),
+        }
+    }
+}
+
+impl EventHandler for BoidRunner {
+    fn update(&mut self, _ctx: &mut Context) -> GameResult<()> {
+        // Only update the game state if enough frames have elapsed
+        if Instant::now() - self.last_update >= Duration::from_millis(MILLIS_PER_UPDATE) {
+            self.cage.update_velocities();
+            self.cage.update_positions();
+            self.last_update = Instant::now();
         }
 
-        let filename = dir
-            .path()
-            .join(format!("frame-{:08}.png", tick));
-
-        buffer.save(&filename).unwrap();
-        files.push(filename);
-        cage.update_velocities();
-        cage.update_positions();
+        Ok(())
     }
 
-    let settings = gifski::Settings {
-        width: None,
-        height: None,
-        quality: 100,
-        once: false,
-        fast: false,
-    };
+    fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
+        graphics::clear(ctx, graphics::WHITE);
 
-    let mut decoder = Box::new(Lodecoder::new(files, 100));
-    let (collector, writer) = gifski::new(settings).expect("Failed to initialise gifski");
-    let decode_thread = thread::spawn(move || decoder.collect(collector));
-    let file = File::create("zz.gif").expect("Couldn't open output file");
-    writer
-        .write(file, &mut NoProgress {})
-        .expect("Failed to write");
-    let _ = decode_thread.join().expect("Failed to decode");
+        let circle = graphics::Mesh::new_circle(
+            ctx,
+            graphics::DrawMode::fill(),
+            na::Point2::new(0.0, 0.0),
+            3.0,
+            2.0,
+            graphics::BLACK,
+        )?;
 
+        for boid in self.cage.boids.iter() {
+            graphics::draw(ctx, &circle, (na::Point2::new(boid.x() as f32, boid.y() as f32), ))?;
+        }
 
-    drop(dir);
+        graphics::present(ctx)?;
+
+        ggez::timer::yield_now();
+
+        Ok(())
+    }
 }

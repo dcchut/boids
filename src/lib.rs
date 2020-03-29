@@ -23,7 +23,7 @@ impl Vector {
     }
 
     pub fn normalize(self) -> Self {
-        self * (1.0/(self.square_magnitude().sqrt()))
+        self * (1.0 / (self.square_magnitude().sqrt()))
     }
 }
 
@@ -97,24 +97,24 @@ pub struct Boid {
 const SEPARATION_FACTOR: f64 = -0.20;
 const ALIGNMENT_FACTOR: f64 = 0.05;
 const COHESION_FACTOR: f64 = 0.05;
-const WALL_FACTOR: f64 = 30.0;
-const DISTANCE_THRESHOLD: f64 = 500.0;
-const VELOCITY:f64 = 100.0;
-const TICK_RATE: f64 = 1.0/100.0;
+const WALL_FACTOR: f64 = 10.0;
+const DISTANCE_THRESHOLD: f64 = 400.0;
+const VELOCITY: f64 = 100.0;
+const TICK_RATE: f64 = 1.0 / 70.0;
 
 fn lower_threshold(x: f64) -> f64 {
-    if x > 0.0 {
-        1.0/x
+    if x <= 0.0 {
+        0.5
     } else {
-        20.0
+        (0.5 - 0.005*x).max(0.0)
     }
 }
 
 fn upper_threshold(x: f64, limit: f64) -> f64 {
-    if x < limit {
-        1.0/(limit - x)
+    if x >= limit {
+        0.5
     } else {
-        20.0
+        (0.5 - (limit - 0.005*x)).max(0.0)
     }
 }
 
@@ -133,28 +133,25 @@ impl Boid {
         let sum_of_velocities: Vector = boids.iter().map(|b| b.velocity - self.velocity).sum();
 
         let centre_of_mass = if !boids.is_empty() {
-            let centre_of_mass_x: f64 = boids
-                .iter()
-                .map(|b| b.position.x)
-                .sum::<f64>()
-                / (boids.len() as f64);
+            let centre_of_mass_x: f64 =
+                boids.iter().map(|b| b.position.x).sum::<f64>() / (boids.len() as f64);
 
-            let centre_of_mass_y: f64 = boids
-                .iter()
-                .map(|b| b.position.y)
-                .sum::<f64>()
-                / (boids.len() as f64);
+            let centre_of_mass_y: f64 =
+                boids.iter().map(|b| b.position.y).sum::<f64>() / (boids.len() as f64);
 
-            Vector::new(centre_of_mass_x - self.position.x, centre_of_mass_y - self.position.y)
+            Vector::new(
+                centre_of_mass_x - self.position.x,
+                centre_of_mass_y - self.position.y,
+            )
         } else {
             Vector::zero()
         };
 
         // compute wall deltas
         let left_wall = Vector::new(1.0, 0.0) * lower_threshold(self.position.x);
-        let right_wall = Vector::new(-1.0, 0.0) * upper_threshold(self.position.x, 1920.0);
+        let right_wall = Vector::new(-1.0, 0.0) * upper_threshold(self.position.x, 1900.0);
         let top_wall = Vector::new(0.0, 1.0) * lower_threshold(self.position.y);
-        let bottom_wall = Vector::new(0.0, -1.0) * upper_threshold(self.position.y, 1080.0);
+        let bottom_wall = Vector::new(0.0, -1.0) * upper_threshold(self.position.y, 1060.0);
         let wall = left_wall + right_wall + top_wall + bottom_wall;
 
         SEPARATION_FACTOR * sum_of_positions
