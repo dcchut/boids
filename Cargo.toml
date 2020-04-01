@@ -11,3 +11,5 @@ repository = "https://github.com/dcchut/dcc-boids"
 [dependencies]
 rand = "0.7"
 ggez = "0.5"
+legion = "0.2"
+derive_more = "0.99"
