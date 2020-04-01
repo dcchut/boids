@@ -15,7 +15,7 @@ const MILLIS_PER_UPDATE: u64 = (1.0 / UPDATES_PER_SECOND * 1000.0) as u64;
 const TICK_DURATION: f64 = 1.0 / (UPDATES_PER_SECOND as f64);
 
 /// The distance between two Boids at which they are considered in the same group
-const DISTANCE_THRESHOLD: f64 = 400.0;
+const DISTANCE_THRESHOLD: f64 = 800.0;
 
 /// The constant (square magnitude) velocity for each boid
 const VELOCITY: f64 = 100.0;
@@ -35,7 +35,7 @@ fn main() {
         (Position::new(x, y), Velocity::new(dx, dy), ID::new(i))
     };
 
-    world.insert((Boid,), (0..1850).map(boid_maker));
+    world.insert((Boid,), (0..1500).map(boid_maker));
 
     let (mut ctx, mut event_loop) = ContextBuilder::new("dcc-boids", "Robert Usher")
         .window_setup(WindowSetup::default().title("dcc-boid"))
@@ -105,10 +105,9 @@ impl WorldRunner {
                     neighbours[i + j + 1].update(*position, *velocity);
                 }
             }
-            let new_velocity = (*velocity + update_boid_velocity(&neighbours[i]))
-                .normalize()
-                .unwrap()
-                * VELOCITY;
+
+            let v_direction = *velocity + update_boid_velocity(&neighbours[i]);
+            let new_velocity = v_direction.normalize().unwrap() * VELOCITY;
             *v_refs[i] = Velocity::new(new_velocity.x, new_velocity.y);
         }
     }
